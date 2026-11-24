@@ -13,7 +13,7 @@ include = ["src/**/*", "frontend/build/**/*", "Cargo.toml", "Cargo.lock", "LICEN
 axum = "0.8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 rust-embed = "8"
-bollard = { version = "0.18", default-features = false, features = ["pipe", "http"] }
+bollard = { version = "0.21", default-features = false, features = ["pipe", "http"] }
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
