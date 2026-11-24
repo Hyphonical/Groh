@@ -1,0 +1,23 @@
+# Rust build output
+/target/
+
+# Frontend (Bun + Vite)
+/frontend/node_modules/
+/frontend/build/
+*.log
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Editors and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
