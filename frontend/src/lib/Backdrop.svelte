@@ -22,8 +22,8 @@
 
   function colours() {
     return {
-      ink: readHex("--ink"),
-      paper: readHex("--paper"),
+      fg: readHex("--fg"),
+      bg: readHex("--bg"),
     };
   }
 

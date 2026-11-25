@@ -114,10 +114,10 @@ onmessage = (o) => {
     f.width = t.width;
     f.height = t.height;
   }
-  if (t.ink) {
+  if (t.fg) {
     const a = (n, e, s) => n.map((i, h) => Math.round(i + (e[h] - i) * s));
-    p = a(t.paper, t.ink, 0.22);
-    b = a(t.paper, t.ink, 0.45);
+    p = a(t.bg, t.fg, 0.22);
+    b = a(t.bg, t.fg, 0.45);
   }
   if (t.canvas) v();
   else k(S);
