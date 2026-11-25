@@ -3,7 +3,7 @@
 
   let containers = $state([]);
   let query = $state("");
-  let expanded = $state({});
+  let selected = $state(null);
   let searchInput = $state(null);
 
   $effect(() => {
@@ -18,19 +18,25 @@
   });
 
   function handleKeydown(event) {
-    if (event.key === "/" && document.activeElement !== searchInput) {
+    if (event.key === "Escape") {
+      if (selected) {
+        closeDetails();
+      } else if (document.activeElement === searchInput) {
+        query = "";
+        searchInput?.blur();
+      }
+    } else if (event.key === "/" && document.activeElement !== searchInput) {
       event.preventDefault();
       searchInput?.focus();
-    } else if (event.key === "Escape" && document.activeElement === searchInput) {
-      query = "";
-      searchInput?.blur();
     }
   }
 
-  function toggleExpand(id, event) {
-    event.preventDefault();
-    event.stopPropagation();
-    expanded[id] = !expanded[id];
+  function openDetails(container) {
+    selected = container;
+  }
+
+  function closeDetails() {
+    selected = null;
   }
 
   let filtered = $derived.by(() => {
@@ -86,7 +92,7 @@
 
 <main>
   <div class="toolbar">
-    <label class="search">
+    <label class="search frame">
       <span class="slash">/</span>
       <input
         bind:this={searchInput}
@@ -98,6 +104,7 @@
     </label>
     <div class="summary">{summary}</div>
   </div>
+  <div class="divider frame" role="separator"></div>
 
   {#each sections as [category, items] (category)}
     <section class="category">
@@ -106,7 +113,7 @@
       {/if}
       <div class="grid">
         {#each items as c (c.id)}
-          <article class="card" class:clickable={Boolean(c.url)}>
+          <article class="card frame" class:clickable={Boolean(c.url)}>
             <div class="card-top">
               {#if c.url}
                 <a class="card-link" href={c.url}>
@@ -136,39 +143,52 @@
 
               <button
                 type="button"
-                class="corner-btn"
-                aria-expanded={Boolean(expanded[c.id])}
-                onclick={(e) => toggleExpand(c.id, e)}
+                class="corner-btn frame"
+                onclick={() => openDetails(c)}
+                aria-label={`Details for ${c.name}`}
               >
                 {c.children?.length ? `+${c.children.length}` : "···"}
               </button>
             </div>
-
-            {#if expanded[c.id]}
-              <div class="details">
-                <div class="meta-row">
-                  <span class="state" data-state={c.state}>{c.state}</span>
-                  <span class="detail">{c.detail}</span>
-                </div>
-                <div class="image">{c.image}</div>
-                {#if c.children?.length}
-                  <div class="children">
-                    {#each c.children as child (child.id)}
-                      <div class="child-row">
-                        <span class="child-name">{child.name}</span>
-                        <span class="state" data-state={child.state}>{child.state}</span>
-                      </div>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            {/if}
           </article>
         {/each}
       </div>
     </section>
   {/each}
 </main>
+
+{#if selected}
+  <button type="button" class="scrim" onclick={closeDetails} aria-label="Close"></button>
+  <div class="window frame" role="dialog" aria-modal="true" aria-labelledby="window-title">
+    <div class="window-bar">
+      <span id="window-title" class="window-title">{selected.name}</span>
+      <button type="button" class="close-btn" onclick={closeDetails} aria-label="Close">
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+          <path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" stroke-width="1.5" fill="none" />
+        </svg>
+      </button>
+    </div>
+    <div class="window-body">
+      <div class="meta-row">
+        <span class="state" data-state={selected.state}>{selected.state}</span>
+      </div>
+      {#if selected.description}
+        <p class="window-desc">{selected.description}</p>
+      {/if}
+      <div class="image">{selected.image}</div>
+      {#if selected.children?.length}
+        <div class="children">
+          {#each selected.children as child (child.id)}
+            <div class="child-row">
+              <span class="child-name">{child.name}</span>
+              <span class="state" data-state={child.state}>{child.state}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <style>
   @font-face {
@@ -206,6 +226,12 @@
     min-height: 100vh;
   }
 
+  .frame {
+    border: 1px solid var(--border);
+    outline: 3px solid var(--bg);
+    outline-offset: 0;
+  }
+
   main {
     position: relative;
     z-index: 1;
@@ -219,9 +245,12 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1.75rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border);
+  }
+
+  .divider {
+    height: 0;
+    margin-bottom: 1.75rem;
   }
 
   .search {
@@ -229,7 +258,6 @@
     align-items: center;
     gap: 0.5rem;
     background: var(--bg);
-    border: 1px solid var(--border);
     padding: 0.35rem 0.6rem;
     min-width: 220px;
   }
@@ -258,6 +286,8 @@
   }
 
   .summary {
+    background: var(--bg);
+    padding: 0.25rem 0.5rem;
     font-size: 0.8rem;
     color: var(--dim);
     white-space: nowrap;
@@ -268,6 +298,9 @@
   }
 
   .category-title {
+    display: inline-block;
+    background: var(--bg);
+    padding: 0.2rem 0.5rem 0.2rem 0;
     margin: 0 0 0.75rem;
     font-size: 0.75rem;
     font-weight: 600;
@@ -284,7 +317,6 @@
 
   .card {
     background: var(--bg);
-    border: 1px solid var(--border);
     padding: 0.9rem 1rem;
     display: flex;
     flex-direction: column;
@@ -347,7 +379,6 @@
 
   .corner-btn {
     background: var(--surface);
-    border: 1px solid var(--border);
     color: var(--dim);
     font-family: inherit;
     font-size: 0.72rem;
@@ -359,14 +390,6 @@
   .corner-btn:hover {
     border-color: var(--border-hover);
     color: var(--fg);
-  }
-
-  .details {
-    border-top: 1px solid var(--border);
-    padding-top: 0.6rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
   }
 
   .meta-row {
@@ -394,8 +417,7 @@
     color: var(--stopped);
   }
 
-  .image,
-  .detail {
+  .image {
     font-size: 0.75rem;
     color: var(--dim);
     overflow: hidden;
@@ -425,5 +447,73 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    padding: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+  }
+
+  .window {
+    position: fixed;
+    z-index: 10;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(480px, calc(100vw - 3rem));
+    background: var(--bg);
+  }
+
+  .window-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .window-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .close-btn {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--dim);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .close-btn:hover {
+    border-color: var(--border-hover);
+    color: var(--fg);
+  }
+
+  .window-body {
+    padding: 0.9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .window-desc {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--fg);
   }
 </style>
