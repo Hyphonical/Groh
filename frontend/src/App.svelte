@@ -143,7 +143,7 @@
 
               <button
                 type="button"
-                class="corner-btn frame"
+                class="corner-btn"
                 onclick={() => openDetails(c)}
                 aria-label={`Details for ${c.name}`}
               >
@@ -379,6 +379,7 @@
 
   .corner-btn {
     background: var(--surface);
+    border: 1px solid var(--border);
     color: var(--dim);
     font-family: inherit;
     font-size: 0.72rem;
