@@ -1,6 +1,5 @@
 use bollard::Docker;
-use bollard::container::ListContainersOptions;
-use bollard::system::EventsOptions;
+use bollard::query_parameters::{EventsOptionsBuilder, ListContainersOptionsBuilder};
 use futures_util::StreamExt;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -43,10 +42,9 @@ pub(crate) async fn watch(
     let _ = snapshot_tx.send(prev.clone());
     let mut filters = HashMap::new();
     filters.insert("type", vec!["container"]);
-    let opts = EventsOptions {
-        filters,
-        ..Default::default()
-    };
+    let opts = EventsOptionsBuilder::default()
+        .filters(&filters)
+        .build();
     let mut stream = docker.events(Some(opts));
 
     while let Some(item) = stream.next().await {
@@ -86,10 +84,9 @@ pub(crate) async fn watch(
 }
 
 async fn fetch_all(docker: &Docker) -> Result<Vec<ContainerInfo>, bollard::errors::Error> {
-    let opts = ListContainersOptions::<String> {
-        all: true,
-        ..Default::default()
-    };
+    let opts = ListContainersOptionsBuilder::default()
+        .all(true)
+        .build();
     let list = docker.list_containers(Some(opts)).await?;
     Ok(parse_and_group(list))
 }
