@@ -102,7 +102,17 @@
         aria-label="Filter containers"
       />
     </label>
-    <div class="summary">{summary}</div>
+    <div class="toolbar-right">
+      <div class="summary">{summary}</div>
+      <a
+        class="gh-link frame"
+        href="https://github.com/Hyphonical/Groh"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Groh on GitHub"
+        aria-label="Groh on GitHub"
+      >GH <span aria-hidden="true">&#8599;</span></a>
+    </div>
   </div>
   <div class="divider frame" role="separator"></div>
 
@@ -291,6 +301,27 @@
     font-size: 0.8rem;
     color: var(--dim);
     white-space: nowrap;
+  }
+
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .gh-link {
+    background: var(--bg);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    color: var(--dim);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .gh-link:hover,
+  .gh-link:focus-visible {
+    border-color: var(--border-hover);
+    color: var(--fg);
   }
 
   .category {
@@ -516,5 +547,40 @@
     margin: 0;
     font-size: 0.85rem;
     color: var(--fg);
+  }
+
+  @media (max-width: 560px) {
+    main {
+      padding: 1rem 1rem 2rem;
+    }
+
+    .toolbar {
+      flex-wrap: wrap;
+    }
+
+    .search {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .grid {
+      grid-template-columns: 1fr;
+    }
+
+    .close-btn {
+      position: relative;
+    }
+
+    .close-btn::after {
+      content: "";
+      position: absolute;
+      inset: -8px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .search {
+      display: none;
+    }
   }
 </style>
