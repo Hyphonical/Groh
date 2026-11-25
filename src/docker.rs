@@ -1,11 +1,13 @@
 use bollard::Docker;
-use bollard::query_parameters::{EventsOptionsBuilder, ListContainersOptionsBuilder};
+use bollard::query_parameters::{
+    EventsOptionsBuilder, ListContainersOptionsBuilder, StatsOptionsBuilder,
+};
 use futures_util::StreamExt;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 use tokio::sync::{mpsc, watch};
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub(crate) struct ContainerInfo {
     pub(crate) id: String,
     pub(crate) name: String,
@@ -16,6 +18,10 @@ pub(crate) struct ContainerInfo {
     pub(crate) url: Option<String>,
     pub(crate) icon: Option<String>,
     pub(crate) category: Option<String>,
+    pub(crate) started_at: Option<String>,
+    pub(crate) cpu_percent: Option<f64>,
+    pub(crate) mem_usage: Option<u64>,
+    pub(crate) mem_limit: Option<u64>,
     pub(crate) children: Vec<ContainerInfo>,
 }
 
@@ -33,12 +39,20 @@ pub(crate) enum ContainerDelta {
     Removed(String),
 }
 
+#[derive(Clone, Copy)]
+struct PrevCpuSample {
+    cpu_total: u64,
+    system_total: u64,
+}
+
+
 pub(crate) async fn watch(
     snapshot_tx: watch::Sender<Vec<ContainerInfo>>,
     delta_tx: mpsc::UnboundedSender<ContainerDelta>,
 ) -> Result<(), bollard::errors::Error> {
     let docker = Docker::connect_with_socket_defaults()?;
-    let mut prev = fetch_all(&docker).await?;
+    let mut prev_cpu: HashMap<String, PrevCpuSample> = HashMap::new();
+    let mut prev = fetch_all(&docker, &mut prev_cpu).await?;
     let _ = snapshot_tx.send(prev.clone());
     let mut filters = HashMap::new();
     filters.insert("type", vec!["container"]);
@@ -46,49 +60,127 @@ pub(crate) async fn watch(
         .filters(&filters)
         .build();
     let mut stream = docker.events(Some(opts));
+    let mut tick = tokio::time::interval(Duration::from_secs(2));
+    // Skip the immediate tick so the loop waits for the first interval.
+    let _ = tick.tick().await;
 
-    while let Some(item) = stream.next().await {
-        let Ok(ev) = item else {
-            continue;
-        };
-        let action = ev.action.as_deref().unwrap_or("");
-        if !matches!(
-            action,
-            "create" | "destroy" | "start" | "stop" | "die" | "rename" | "pause" | "unpause"
-        ) {
-            continue;
-        }
-
-        let Ok(next) = fetch_all(&docker).await else {
-            continue;
-        };
-
-        let prev_names: HashSet<&str> = prev.iter().map(|c| c.name.as_str()).collect();
-        let next_names: HashSet<&str> = next.iter().map(|c| c.name.as_str()).collect();
-
-        for name in &next_names {
-            if !prev_names.contains(name) {
-                let _ = delta_tx.send(ContainerDelta::Added((*name).to_string()));
+    loop {
+        tokio::select! {
+            item = stream.next() => {
+                let Some(item) = item else {
+                    break;
+                };
+                let Ok(ev) = item else {
+                    continue;
+                };
+                let action = ev.action.as_deref().unwrap_or("");
+                if !matches!(
+                    action,
+                    "create" | "destroy" | "start" | "stop" | "die" | "rename" | "pause"
+                        | "unpause"
+                ) {
+                    continue;
+                }
+                let Ok(next) = fetch_all(&docker, &mut prev_cpu).await else {
+                    continue;
+                };
+                let prev_names: HashSet<&str> =
+                    prev.iter().map(|c| c.name.as_str()).collect();
+                let next_names: HashSet<&str> =
+                    next.iter().map(|c| c.name.as_str()).collect();
+                for name in &next_names {
+                    if !prev_names.contains(name) {
+                        let _ = delta_tx.send(ContainerDelta::Added((*name).to_string()));
+                    }
+                }
+                for name in &prev_names {
+                    if !next_names.contains(name) {
+                        let _ = delta_tx.send(ContainerDelta::Removed((*name).to_string()));
+                    }
+                }
+                let _ = snapshot_tx.send(next.clone());
+                prev = next;
+            }
+            _ = tick.tick() => {
+                let Ok(next) = fetch_all(&docker, &mut prev_cpu).await else {
+                    continue;
+                };
+                let _ = snapshot_tx.send(next.clone());
+                prev = next;
             }
         }
-        for name in &prev_names {
-            if !next_names.contains(name) {
-                let _ = delta_tx.send(ContainerDelta::Removed((*name).to_string()));
-            }
-        }
-        let _ = snapshot_tx.send(next.clone());
-        prev = next;
     }
 
     Ok(())
 }
 
-async fn fetch_all(docker: &Docker) -> Result<Vec<ContainerInfo>, bollard::errors::Error> {
+async fn fetch_all(
+    docker: &Docker,
+    prev_cpu: &mut HashMap<String, PrevCpuSample>,
+) -> Result<Vec<ContainerInfo>, bollard::errors::Error> {
     let opts = ListContainersOptionsBuilder::default()
         .all(true)
         .build();
     let list = docker.list_containers(Some(opts)).await?;
-    Ok(parse_and_group(list))
+    let mut infos = parse_and_group(list);
+    enrich(docker, &mut infos, prev_cpu).await;
+    Ok(infos)
+}
+
+async fn enrich(
+    docker: &Docker,
+    infos: &mut [ContainerInfo],
+    prev_cpu: &mut HashMap<String, PrevCpuSample>,
+) {
+    for info in infos.iter_mut() {
+        let is_running = matches!(info.state.as_str(), "running" | "paused")
+            && !info.id.is_empty();
+        if is_running {
+            if let Ok(inspect) = docker.inspect_container(&info.id, None).await
+                && let Some(started) = inspect.state.and_then(|s| s.started_at)
+                && !started.is_empty()
+                && started != "0001-01-01T00:00:00Z"
+            {
+                info.started_at = Some(started);
+            }
+            let stats_opts = StatsOptionsBuilder::default()
+                .stream(false)
+                .one_shot(true)
+                .build();
+            if let Some(Ok(sample)) = docker.stats(&info.id, Some(stats_opts)).next().await {
+                if let Some(memory) = sample.memory_stats {
+                    info.mem_usage = memory.usage;
+                    info.mem_limit = memory.limit.filter(|limit| *limit > 0);
+                }
+                if let Some(cpu) = sample.cpu_stats {
+                    let total = cpu.cpu_usage.and_then(|usage| usage.total_usage);
+                    let system = cpu.system_cpu_usage;
+                    if let (Some(total), Some(system)) = (total, system) {
+                        let online = cpu.online_cpus.unwrap_or(1).max(1);
+                        if let Some(prev_sample) = prev_cpu.get(&info.id)
+                            && system > prev_sample.system_total
+                            && total >= prev_sample.cpu_total
+                        {
+                            let cpu_delta = (total - prev_sample.cpu_total) as f64;
+                            let system_delta = (system - prev_sample.system_total) as f64;
+                            if system_delta > 0.0 {
+                                info.cpu_percent =
+                                    Some(cpu_delta / system_delta * f64::from(online) * 100.0);
+                            }
+                        }
+                        prev_cpu.insert(
+                            info.id.clone(),
+                            PrevCpuSample {
+                                cpu_total: total,
+                                system_total: system,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+        Box::pin(enrich(docker, &mut info.children, prev_cpu)).await;
+    }
 }
 
 fn parse_and_group(list: Vec<bollard::models::ContainerSummary>) -> Vec<ContainerInfo> {
@@ -167,6 +259,10 @@ fn parse_entry(c: bollard::models::ContainerSummary) -> Option<RawEntry> {
             url,
             icon,
             category,
+            started_at: None,
+            cpu_percent: None,
+            mem_usage: None,
+            mem_limit: None,
             children: Vec::new(),
         },
         container_name,

@@ -3,7 +3,8 @@
 
   let containers = $state([]);
   let query = $state("");
-  let selected = $state(null);
+  let selectedId = $state(null);
+  let nowTick = $state(0);
   let searchInput = $state(null);
 
   $effect(() => {
@@ -15,6 +16,17 @@
       }
     };
     return () => source.close();
+  });
+  $effect(() => {
+    const timer = setInterval(() => {
+      nowTick += 1;
+    }, 30000);
+    return () => clearInterval(timer);
+  });
+
+  let selected = $derived.by(() => {
+    if (!selectedId) return null;
+    return containers.find((c) => c.id === selectedId) ?? null;
   });
 
   function handleKeydown(event) {
@@ -32,11 +44,53 @@
   }
 
   function openDetails(container) {
-    selected = container;
+    selectedId = container.id;
   }
 
   function closeDetails() {
-    selected = null;
+    selectedId = null;
+  }
+
+  function formatBytes(bytes) {
+    if (bytes == null) return "—";
+    const mb = bytes / 1048576;
+    if (mb < 1024) {
+      if (mb < 10) return `${mb.toFixed(1)} MB`;
+      return `${Math.round(mb)} MB`;
+    }
+    return `${(mb / 1024).toFixed(1)} GB`;
+  }
+
+  function formatCpu(percent) {
+    if (percent == null) return "—";
+    return `${percent.toFixed(1)}%`;
+  }
+
+  function uptimeText(startedAt) {
+    void nowTick;
+    if (!startedAt) return "—";
+    const started = Date.parse(startedAt);
+    if (Number.isNaN(started)) return "—";
+    const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000));
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ${minutes % 60}m`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+  }
+
+  function memPercent(item) {
+    if (item?.mem_usage == null || !item?.mem_limit) return null;
+    return (item.mem_usage / item.mem_limit) * 100;
+  }
+
+  function barLevel(percent) {
+    if (percent == null) return "low";
+    if (percent > 80) return "high";
+    if (percent > 60) return "med";
+    return "low";
   }
 
   let filtered = $derived.by(() => {
@@ -186,6 +240,33 @@
         <p class="window-desc">{selected.description}</p>
       {/if}
       <div class="image">{selected.image}</div>
+      <div class="stats">
+        <div class="stat-row">
+          <span class="stat-label">{uptimeText(selected.started_at)}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">CPU {formatCpu(selected.cpu_percent)}</span>
+          <span class="bar">
+            <span
+              class="bar-fill"
+              data-level={barLevel(selected.cpu_percent)}
+              style:width={`${Math.min(100, selected.cpu_percent ?? 0)}%`}
+            ></span>
+          </span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">
+            MEM {formatBytes(selected.mem_usage)} / {formatBytes(selected.mem_limit)}
+          </span>
+          <span class="bar">
+            <span
+              class="bar-fill"
+              data-level={barLevel(memPercent(selected))}
+              style:width={`${Math.min(100, memPercent(selected) ?? 0)}%`}
+            ></span>
+          </span>
+        </div>
+      </div>
       {#if selected.children?.length}
         <div class="children">
           {#each selected.children as child (child.id)}
@@ -547,6 +628,48 @@
     margin: 0;
     font-size: 0.85rem;
     color: var(--fg);
+  }
+
+  .stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-top: 0.45rem;
+    border-top: 1px dashed var(--border);
+  }
+
+  .stat-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.78rem;
+  }
+
+  .stat-label {
+    color: var(--dim);
+    white-space: nowrap;
+  }
+
+  .bar {
+    flex: 1;
+    height: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    min-width: 0;
+  }
+
+  .bar-fill {
+    display: block;
+    height: 100%;
+    background: var(--running);
+  }
+
+  .bar-fill[data-level="med"] {
+    background: var(--warn);
+  }
+
+  .bar-fill[data-level="high"] {
+    background: var(--stopped);
   }
 
   @media (max-width: 560px) {

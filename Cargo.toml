@@ -11,7 +11,7 @@ include = ["src/**/*", "frontend/build/**/*", "Cargo.toml", "Cargo.lock", "LICEN
 
 [dependencies]
 axum = "0.8"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
 rust-embed = "8"
 bollard = { version = "0.21", default-features = false, features = ["pipe", "http"] }
 futures-util = "0.3"
