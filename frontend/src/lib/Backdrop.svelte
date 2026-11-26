@@ -1,5 +1,7 @@
 <script>
   import { onMount } from "svelte";
+  let { theme } = $props();
+  let worker = null;
 
   let canvas = $state(null);
 
@@ -29,7 +31,7 @@
 
   onMount(() => {
     if (!canvas || !("transferControlToOffscreen" in canvas)) return;
-    const worker = new Worker(
+    worker = new Worker(
       new URL("./backdrop.worker.js", import.meta.url),
       { type: "module" },
     );
@@ -44,7 +46,13 @@
     return () => {
       removeEventListener("resize", onResize);
       worker.terminate();
+      worker = null;
     };
+  });
+
+  $effect(() => {
+    void theme;
+    worker?.postMessage(colours());
   });
 </script>
 

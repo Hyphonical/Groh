@@ -9,6 +9,17 @@
   let nowTick = $state(0);
   let searchInput = $state(null);
 
+  let theme = $state(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+
+  function toggleTheme() {
+    theme = theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("groh-theme", theme);
+    } catch {
+    }
+  }
+
   $effect(() => {
     const source = new EventSource("/api/events");
     source.onmessage = (event) => {
@@ -144,7 +155,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<Backdrop />
+<Backdrop {theme} />
 
 <main>
   <div class="toolbar">
@@ -160,6 +171,12 @@
     </label>
     <div class="toolbar-right">
       <div class="summary">{summary}</div>
+      <button
+        type="button"
+        class="frame theme-btn"
+        onclick={toggleTheme}
+        aria-label="Switch to {theme === 'light' ? 'dark' : 'light'} theme"
+      >{theme === "light" ? "DARK" : "LIGHT"}</button>
       <a
         class="gh-link frame"
         href="https://github.com/Hyphonical/Groh"
@@ -310,6 +327,21 @@
     --stopped: #de7c4c;
     --warn: #e2c47e;
     caret-color: #ffffff;
+    color-scheme: dark;
+  }
+
+  :global(:root[data-theme="light"]) {
+    --bg: #ffffd4;
+    --surface: #ffffff;
+    --fg: #141414;
+    --dim: #687274;
+    --border: #8a989b;
+    --border-hover: #778385;
+    --running: #797f56;
+    --stopped: #a6603d;
+    --warn: #85744d;
+    color-scheme: light;
+    caret-color: #141414;
   }
 
   :global(::selection) {
@@ -412,6 +444,22 @@
 
   .gh-link:hover,
   .gh-link:focus-visible {
+    border-color: var(--border-hover);
+    color: var(--fg);
+  }
+
+  .theme-btn {
+    background: var(--bg);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+    color: var(--dim);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .theme-btn:hover,
+  .theme-btn:focus-visible {
     border-color: var(--border-hover);
     color: var(--fg);
   }
