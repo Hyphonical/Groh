@@ -60,8 +60,8 @@ pub(crate) async fn watch(
         .filters(&filters)
         .build();
     let mut stream = docker.events(Some(opts));
-    let mut tick = tokio::time::interval(Duration::from_secs(2));
-    // Skip the immediate tick so the loop waits for the first interval.
+    let mut tick = tokio::time::interval(Duration::from_secs(1));
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let _ = tick.tick().await;
 
     loop {

@@ -242,7 +242,7 @@
       <div class="image">{selected.image}</div>
       <div class="stats">
         <div class="stat-row">
-          <span class="stat-label">{uptimeText(selected.started_at)}</span>
+          <span class="stat-label">UPTIME {uptimeText(selected.started_at)}</span>
         </div>
         <div class="stat-row">
           <span class="stat-label">CPU {formatCpu(selected.cpu_percent)}</span>
