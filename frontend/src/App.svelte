@@ -1,5 +1,7 @@
 <script>
   import Backdrop from "./lib/Backdrop.svelte";
+  import StatusSquare from "./lib/StatusSquare.svelte";
+  import { statusTone } from "./lib/status.js";
 
   let containers = $state([]);
   let query = $state("");
@@ -185,7 +187,10 @@
                     <img class="icon" src={c.icon} alt="" />
                   {/if}
                   <div class="title-group">
-                    <span class="name">{c.name}</span>
+                    <span class="name">
+                      <StatusSquare tone={statusTone(c)} />
+                      <span class="name-text">{c.name}</span>
+                    </span>
                     {#if c.description}
                       <span class="desc">{c.description}</span>
                     {/if}
@@ -197,7 +202,10 @@
                     <img class="icon" src={c.icon} alt="" />
                   {/if}
                   <div class="title-group">
-                    <span class="name">{c.name}</span>
+                    <span class="name">
+                      <StatusSquare tone={statusTone(c)} />
+                      <span class="name-text">{c.name}</span>
+                    </span>
                     {#if c.description}
                       <span class="desc">{c.description}</span>
                     {/if}
@@ -271,7 +279,10 @@
         <div class="children">
           {#each selected.children as child (child.id)}
             <div class="child-row">
-              <span class="child-name">{child.name}</span>
+              <span class="child-id">
+                <StatusSquare tone={statusTone(child)} />
+                <span class="child-name">{child.name}</span>
+              </span>
               <span class="state" data-state={child.state}>{child.state}</span>
             </div>
           {/each}
@@ -295,9 +306,9 @@
     --dim: #778385;
     --border: #44474a;
     --border-hover: #8a989b;
-    --running: #afb97a;
-    --stopped: #c06d44;
-    --warn: #c2a86c;
+    --running: #ccd88c;
+    --stopped: #de7c4c;
+    --warn: #e2c47e;
     caret-color: #ffffff;
   }
 
@@ -473,12 +484,20 @@
   }
 
   .name {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--fg);
+    min-width: 0;
+  }
+
+  .name-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
   }
 
   .desc {
@@ -549,10 +568,17 @@
 
   .child-row {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
     font-size: 0.76rem;
+  }
+
+  .child-id {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
   }
 
   .child-name {
@@ -560,6 +586,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
   }
 
   .scrim {
