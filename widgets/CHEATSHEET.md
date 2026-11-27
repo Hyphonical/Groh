@@ -157,7 +157,7 @@ operations (1,000,000), string/array/map sizes, and wall-clock time per run
 
 | `needs` entry | Available calls |
 |---|---|
-| `net:http` | `http::get(url)` → string; `http::get_json(url)` → parsed JSON value. ◆ Every request and redirect hop is checked against `META.hosts` (exact hostname match). |
+| `net:http` | `http::get(url)` → string; `http::get_json(url)` → parsed JSON value. Both also accept an optional second argument, `http::get(url, headers)` / `http::get_json(url, headers)`, where `headers` is a map of strings such as `#{ "X-Api-Key": "..." }`; headered requests skip the 60s cache. ◆ Every request and redirect hop is checked against `META.hosts` (exact hostname match). |
 | `docker:containers` | `docker::containers()` → array of container maps (`id`, `name`, `state`, `detail`, `image`, `description`, `url`, `icon`, `category`, `started_epoch`, `cpu_percent`, `mem_usage`, `mem_limit`, `children`). |
 | `time:now` | `time::now()` → Unix epoch seconds (`i64`). |
 

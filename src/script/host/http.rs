@@ -1,8 +1,9 @@
 use super::HostContext;
 use crate::view::native_error;
 use rhai::{Dynamic, EvalAltResult, Module, Shared};
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
-use ureq::http::Uri;
+use ureq::http::{HeaderName, HeaderValue, Uri};
 
 pub(crate) type NativeResult = Result<Dynamic, Box<EvalAltResult>>;
 
@@ -22,27 +23,59 @@ pub(crate) fn build_agent() -> ureq::Agent {
 pub(crate) fn module(context: HostContext) -> Shared<Module> {
     let mut module = Module::new();
     let get_context = context.clone();
+    let get_headers_context = context.clone();
+    let json_context = context.clone();
+    let json_headers_context = context;
     module.set_native_fn("get", move |url: &str| -> NativeResult {
-        fetch_cached(&get_context, url).map(Dynamic::from)
+        fetch_cached(&get_context, url, &Headers::new()).map(Dynamic::from)
+    });
+    module.set_native_fn("get", move |url: &str, headers: Dynamic| -> NativeResult {
+        let headers = headers_of(&headers)?;
+        fetch_cached(&get_headers_context, url, &headers).map(Dynamic::from)
     });
     module.set_native_fn("get_json", move |url: &str| -> NativeResult {
-        let body = fetch_cached(&context, url)?;
-        let value: serde_json::Value =
-            serde_json::from_str(&body).map_err(|err| native_error(err.to_string()))?;
-        to_dynamic(value)
+        fetch_json(&json_context, url, &Headers::new())
+    });
+    module.set_native_fn("get_json", move |url: &str, headers: Dynamic| -> NativeResult {
+        let headers = headers_of(&headers)?;
+        fetch_json(&json_headers_context, url, &headers)
     });
     module.into()
 }
 
-fn fetch_cached(context: &HostContext, url: &str) -> Result<String, Box<EvalAltResult>> {
-    if let Ok(cache) = context.http_cache.lock()
+type Headers = BTreeMap<String, String>;
+
+fn headers_of(value: &Dynamic) -> Result<Headers, Box<EvalAltResult>> {
+    if value.is_unit() {
+        return Ok(Headers::new());
+    }
+    rhai::serde::from_dynamic(value).map_err(|err| native_error(err.to_string()))
+}
+
+fn fetch_json(context: &HostContext, url: &str, headers: &Headers) -> NativeResult {
+    let body = fetch_cached(context, url, headers)?;
+    let value: serde_json::Value =
+        serde_json::from_str(&body).map_err(|err| native_error(err.to_string()))?;
+    to_dynamic(value)
+}
+
+fn fetch_cached(
+    context: &HostContext,
+    url: &str,
+    headers: &Headers,
+) -> Result<String, Box<EvalAltResult>> {
+    let cacheable = headers.is_empty();
+    if cacheable
+        && let Ok(cache) = context.http_cache.lock()
         && let Some((fetched_at, body)) = cache.get(url)
         && fetched_at.elapsed() < CACHE_TTL
     {
         return Ok(body.clone());
     }
-    let body = fetch_text(context, url)?;
-    if let Ok(mut cache) = context.http_cache.lock() {
+    let body = fetch_text(context, url, headers)?;
+    if cacheable
+        && let Ok(mut cache) = context.http_cache.lock()
+    {
         cache.retain(|_, (fetched_at, _)| fetched_at.elapsed() < CACHE_TTL);
         if cache.len() >= MAX_CACHE_ENTRIES {
             cache.clear();
@@ -52,12 +85,20 @@ fn fetch_cached(context: &HostContext, url: &str) -> Result<String, Box<EvalAltR
     Ok(body)
 }
 
-fn fetch_text(context: &HostContext, url: &str) -> Result<String, Box<EvalAltResult>> {
-    let bytes = fetch_bytes(context, url)?;
+fn fetch_text(
+    context: &HostContext,
+    url: &str,
+    headers: &Headers,
+) -> Result<String, Box<EvalAltResult>> {
+    let bytes = fetch_bytes(context, url, headers)?;
     String::from_utf8(bytes).map_err(|err| native_error(err.to_string()))
 }
 
-fn fetch_bytes(context: &HostContext, url: &str) -> Result<Vec<u8>, Box<EvalAltResult>> {
+fn fetch_bytes(
+    context: &HostContext,
+    url: &str,
+    headers: &Headers,
+) -> Result<Vec<u8>, Box<EvalAltResult>> {
     let mut current = url.to_string();
     for _ in 0..=MAX_REDIRECTS {
         let timeout = context.http_timeout();
@@ -70,9 +111,17 @@ fn fetch_bytes(context: &HostContext, url: &str) -> Result<Vec<u8>, Box<EvalAltR
             return Err(native_error(format!("host not allowed: {current}")));
         }
 
-        let mut response = context
-            .http_agent
-            .get(&current)
+        let mut request = context.http_agent.get(&current);
+        for (name, value) in headers {
+            let name: HeaderName = name
+                .parse()
+                .map_err(|_| native_error(format!("invalid header name: {name}")))?;
+            let value: HeaderValue = value
+                .parse()
+                .map_err(|_| native_error(format!("invalid header value for {name}")))?;
+            request = request.header(name, value);
+        }
+        let mut response = request
             .config()
             .timeout_global(Some(timeout))
             .build()

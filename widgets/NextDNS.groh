@@ -1,0 +1,75 @@
+const META = #{
+    title: "NextDNS (24h)",
+    interval: "30m",
+    size: "small",
+    needs: ["net:http"],
+    hosts: ["api.nextdns.io"],
+    config: #{
+        profile_id: #{ type: "string", required: true, help: "NextDNS profile id" },
+        api_key: #{ type: "string", required: true, secret: true, help: "NextDNS API key" },
+    },
+};
+
+fn queries_of(entry) {
+    if entry.queries == () {
+        0.0
+    } else {
+        entry.queries.to_float()
+    }
+}
+
+fn one_decimal(value) {
+    let rounded = (value * 10.0).round() / 10.0;
+    if (rounded % 1.0).abs() < 0.001 {
+        `${rounded.to_int()}.0`
+    } else {
+        `${rounded}`
+    }
+}
+
+let url = "https://api.nextdns.io/profiles/" + config.profile_id + "/analytics/status?from=-24h";
+
+let data = ();
+try {
+    data = http::get_json(url, #{ "X-Api-Key": config.api_key });
+} catch (err) {
+}
+
+if data == () || data.data == () {
+    return text("NextDNS unavailable", #{ color: "red", size: "small" });
+}
+
+let total = 0.0;
+let blocked = 0.0;
+for entry in data.data {
+    let queries = queries_of(entry);
+    total += queries;
+    if entry.status == "blocked" {
+        blocked += queries;
+    }
+}
+
+let rate = if total > 0.0 { blocked * 100.0 / total } else { 0.0 };
+let total_int = total.to_int();
+let blocked_int = blocked.to_int();
+let rate_text = one_decimal(rate) + "%";
+let analytics_url = "https://my.nextdns.io/" + config.profile_id + "/analytics";
+
+box([
+    row([
+        column([
+            text(`${total_int}`, #{ size: "large", bold: true, color: "cyan" }),
+            text("QUERIES", #{ size: "small", color: "cyan" }),
+        ]),
+        column([
+            text(`${blocked_int}`, #{ size: "large", bold: true, color: "red" }),
+            text("BLOCKED", #{ size: "small", color: "cyan" }),
+        ]),
+        column([
+            text(rate_text, #{ size: "large", bold: true, color: "cyan" }),
+            text("RATE", #{ size: "small", color: "cyan" }),
+        ]),
+    ], #{ gap: 16 }),
+    separator(),
+    link("Analytics", analytics_url),
+])

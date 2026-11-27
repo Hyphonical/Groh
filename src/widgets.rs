@@ -446,4 +446,39 @@ mod tests {
         );
         assert!(text.contains("\"label\":\"Google\""), "tree: {text}");
     }
+
+    #[test]
+    fn http_get_json_with_headers_resolves_overload() {
+        let source = r##"const META = #{ title: "T", interval: "1m", size: "small", needs: ["net:http"], hosts: ["api.nextdns.io"], config: #{} }; let data = http::get_json("https://example.com/x", #{ "X-Api-Key": "k" }); text("ok")"##;
+        let meta = script::extract_meta(source, "test").unwrap_or_else(|err| panic!("{err}"));
+        let context = RunContext {
+            http_agent: script::host::http::build_agent(),
+            http_cache: Arc::new(Mutex::new(HashMap::new())),
+            containers: Vec::new(),
+        };
+        let Err(err) = script::run_script(
+            source,
+            &meta,
+            &serde_json::Value::Object(Default::default()),
+            &context,
+            Duration::from_secs(5),
+        ) else {
+            panic!("expected host-not-allowed error");
+        };
+        assert!(err.contains("host not allowed"), "err: {err}");
+    }
+
+    #[test]
+    fn nextdns_script_meta_extracts() {
+        let source = std::fs::read_to_string("widgets/NextDNS.groh")
+            .unwrap_or_else(|err| panic!("{err}"));
+        let meta =
+            script::extract_meta(&source, "NextDNS.groh").unwrap_or_else(|err| panic!("{err}"));
+        assert_eq!(meta.title, "NextDNS (24h)");
+        assert_eq!(meta.hosts, vec!["api.nextdns.io".to_string()]);
+        assert!(meta.config.contains_key("profile_id"));
+        let api_key = &meta.config["api_key"];
+        assert!(api_key.required);
+        assert!(api_key.secret);
+    }
 }
