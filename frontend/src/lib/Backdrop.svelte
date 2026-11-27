@@ -24,8 +24,8 @@
 
   function colours() {
     return {
-      fg: readHex("--fg"),
-      bg: readHex("--bg"),
+      fg: readHex("--foreground"),
+      bg: readHex("--background"),
     };
   }
 

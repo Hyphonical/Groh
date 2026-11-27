@@ -1,0 +1,224 @@
+const META = #{
+    title: "Containers",
+    interval: "1s",
+    size: "large",
+    needs: ["docker:containers", "time:now"],
+    hosts: [],
+    config: #{},
+};
+
+fn tone(c) {
+    if ["exited", "stopped", "dead"].contains(c.state) {
+        "stopped"
+    } else if c.detail.to_lower().contains("unhealthy") || c.state == "paused" || c.state == "restarting" {
+        "warn"
+    } else if c.state == "running" {
+        "running"
+    } else {
+        "other"
+    }
+}
+
+fn rank(name) {
+    if name == "stopped" {
+        3
+    } else if name == "warn" {
+        2
+    } else if name == "running" {
+        1
+    } else {
+        0
+    }
+}
+
+fn tone_deep(c) {
+    let best = tone(c);
+    for child in c.children {
+        let child_tone = tone_deep(child);
+        if rank(child_tone) > rank(best) {
+            best = child_tone;
+        }
+    }
+    best
+}
+
+fn level_color(value) {
+    if value == () {
+        "light-green"
+    } else if value > 80.0 {
+        "light-red"
+    } else if value > 60.0 {
+        "light-yellow"
+    } else {
+        "light-green"
+    }
+}
+
+fn percent(value) {
+    if value == () {
+        0.0
+    } else if value > 100.0 {
+        100.0
+    } else {
+        value
+    }
+}
+
+fn one_decimal(value) {
+    let rounded = (value.to_float() * 10.0).round() / 10.0;
+    if (rounded % 1.0).abs() < 0.001 {
+        `${rounded.to_int()}.0`
+    } else {
+        `${rounded}`
+    }
+}
+
+fn bytes(value) {
+    if value == () {
+        "—"
+    } else {
+        let mb = value.to_float() / 1048576.0;
+        if mb < 1024.0 {
+            if mb < 10.0 {
+                one_decimal(mb) + " MB"
+            } else {
+                "" + mb.round().to_int() + " MB"
+            }
+        } else {
+            one_decimal(mb / 1024.0) + " GB"
+        }
+    }
+}
+
+fn uptime_text(epoch) {
+    if epoch == () || epoch == 0 {
+        return "—";
+    }
+    let seconds = time::now() - epoch;
+    if seconds < 60 {
+        return `${seconds}s`;
+    }
+    let minutes = (seconds / 60).to_int();
+    if minutes < 60 {
+        return `${minutes}m`;
+    }
+    let hours = (minutes / 60).to_int();
+    if hours < 24 {
+        return `${hours}h ${minutes % 60}m`;
+    }
+    let days = (hours / 24).to_int();
+    return `${days}d ${hours % 24}h`;
+}
+
+fn tallies(list, acc) {
+    for c in list {
+        if c.detail.to_lower().contains("unhealthy") {
+            acc.unhealthy += 1;
+        } else if c.state == "running" {
+            acc.running += 1;
+        } else if ["exited", "stopped", "dead"].contains(c.state) {
+            acc.exited += 1;
+        }
+        acc = tallies(c.children, acc);
+    }
+    acc
+}
+
+fn child_rows(c) {
+    let rows = [];
+    for child in c.children {
+        let dot = status_dot(tone_deep(child));
+        let name = text(child.name);
+        let state = text(child.state, #{ color: "cyan", size: "small" });
+        let items = [dot, name, state];
+        rows.push(row(items));
+    }
+    rows
+}
+
+fn window_body(c) {
+    let cpu = c.cpu_percent;
+    let mem_percent = if c.mem_usage == () || c.mem_limit == () {
+        ()
+    } else {
+        c.mem_usage.to_float() / c.mem_limit.to_float() * 100.0
+    };
+    let cpu_text = if cpu == () { "—" } else { one_decimal(cpu) + "%" };
+    let mem_text = `${bytes(c.mem_usage)} / ${bytes(c.mem_limit)}`;
+    let body = [];
+    body.push(text(c.state, #{ color: "cyan", size: "small" }));
+    if c.description != () && c.description != "" {
+        body.push(text(c.description, #{ bold: true }));
+    }
+    if c.image != () && c.image != "" {
+        body.push(text(c.image, #{ color: "cyan", size: "small" }));
+    }
+    if c.started_at != () && c.started_at != 0 {
+        let uptime = uptime_text(c.started_at);
+        body.push(text(`UPTIME ${uptime}`, #{ color: "cyan", size: "small" }));
+    }
+    body.push(separator());
+    let cpu_label = text(`CPU ${cpu_text}`, #{ color: "cyan", size: "small" });
+    let cpu_bar = bar(percent(cpu), #{ color: level_color(cpu) });
+    let cpu_items = [cpu_label, cpu_bar];
+    body.push(row(cpu_items));
+    let mem_label = text(`MEM ${mem_text}`, #{ color: "cyan", size: "small" });
+    let mem_bar = bar(percent(mem_percent), #{ color: level_color(mem_percent) });
+    let mem_items = [mem_label, mem_bar];
+    body.push(row(mem_items));
+    body.push(separator());
+    for child_row in child_rows(c) {
+        body.push(child_row);
+    }
+    body
+}
+
+fn card_for(c) {
+    let header = [];
+    if c.icon != () {
+        header.push(icon(c.icon));
+    }
+    header.push(status_dot(tone_deep(c)));
+    let title_column = [];
+    title_column.push(text(c.name, #{ bold: true }));
+    if c.description != () && c.description != "" {
+        title_column.push(text(c.description, #{ color: "cyan", size: "small" }));
+    }
+    header.push(column(title_column));
+    let details = window(c.name, window_body(c));
+    header.push(details);
+    let header_row = row(header);
+    let items = [header_row];
+    box(items)
+}
+
+let containers = docker::containers();
+let buckets = #{};
+for c in containers {
+    let key = c.category ?? "";
+    key.trim();
+    if !buckets.contains(key) {
+        buckets[key] = [];
+    }
+    buckets[key].push(card_for(c));
+}
+
+let order = buckets.keys().filter(|k| k != "");
+order.sort();
+
+let groups = [];
+for name in order {
+    groups.push(column([text(name, #{ size: "small", color: "cyan", bold: true }), row(buckets[name])]));
+}
+if buckets.contains("") {
+    groups.push(row(buckets[""]));
+}
+let counts = tallies(containers, #{ running: 0, exited: 0, unhealthy: 0 });
+let headline = `${counts.running} running`;
+if counts.exited > 0 {
+    headline += ` · ${counts.exited} exited`;
+}
+if counts.unhealthy > 0 {
+    headline += ` · ${counts.unhealthy} unhealthy`;
+}
+column([text(headline, #{ size: "small", color: "cyan" }), column(groups)])

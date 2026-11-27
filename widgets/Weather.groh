@@ -1,0 +1,93 @@
+const META = #{
+    title: "Weather",
+    interval: "10m",
+    size: "small",
+    needs: ["net:http"],
+    hosts: ["api.open-meteo.com"],
+    config: #{
+        lat: #{ type: "number", fallback: 51.2194, help: "Latitude" },
+        lon: #{ type: "number", fallback: 4.4025, help: "Longitude" },
+    },
+};
+
+fn weather_text(code) {
+    if code == 0 {
+        "Clear"
+    } else if code < 3 {
+        "Partly cloudy"
+    } else if code == 3 {
+        "Overcast"
+    } else if code == 45 || code == 48 {
+        "Fog"
+    } else {
+        weather_precip(code)
+    }
+}
+
+fn weather_precip(code) {
+    if code >= 51 && code <= 57 {
+        "Drizzle"
+    } else if code >= 61 && code <= 67 {
+        "Rain"
+    } else if code >= 71 && code <= 77 {
+        "Snow"
+    } else if code >= 80 && code <= 82 {
+        "Showers"
+    } else if code >= 85 && code <= 86 {
+        "Snow showers"
+    } else if code == 95 {
+        "Thunderstorm"
+    } else if code == 96 || code == 99 {
+        "Hail"
+    } else {
+        "Unknown"
+    }
+}
+
+fn one_decimal(value) {
+    if value == () {
+        return "—";
+    }
+    let rounded = (value.to_float() * 10.0).round() / 10.0;
+    if (rounded % 1.0).abs() < 0.001 {
+        `${rounded.to_int()}.0`
+    } else {
+        `${rounded}`
+    }
+}
+
+let url = "https://api.open-meteo.com/v1/forecast?latitude=" + config.lat + "&longitude=" + config.lon + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto";
+
+let data = ();
+try {
+    data = http::get_json(url);
+} catch (err) {
+}
+
+if data == () || data.current == () {
+    return text("Weather unavailable", #{ color: "cyan", size: "small" });
+}
+
+let current = data.current;
+let temp = one_decimal(current.temperature_2m);
+let feels = one_decimal(current.apparent_temperature);
+let humidity = if current.relative_humidity_2m == () {
+    "—"
+} else {
+    `${current.relative_humidity_2m}`
+};
+let wind = one_decimal(current.wind_speed_10m);
+let condition = weather_text(current.weather_code);
+
+box([
+    column([
+        text(`${temp}°C`, #{ size: "large", bold: true }),
+        text(condition, #{ color: "cyan", size: "small" }),
+        separator(),
+        row([
+            text(`Feels ${feels}°C`, #{ color: "cyan", size: "small" }),
+            text(`Humidity ${humidity}%`, #{ color: "cyan", size: "small" }),
+        ]),
+        text(`Wind ${wind} km/h`, #{ color: "cyan", size: "small" }),
+    ]),
+])

@@ -1,0 +1,57 @@
+const META = #{
+    title: "Bookmarks",
+    interval: "1h",
+    size: "normal",
+    needs: [],
+    hosts: [],
+    config: #{
+        links: #{ type: "list", fallback: [], help: "Entries as 'Label | https://example.com'" },
+    },
+};
+
+fn favicon_url(url) {
+    let parts = url.split("/");
+    if parts.len() < 3 {
+        return ();
+    }
+    if parts[0] != "https:" && parts[0] != "http:" {
+        return ();
+    }
+    return parts[0] + "//" + parts[2] + "/favicon.ico";
+}
+
+fn item(entry) {
+    let bits = entry.split("|");
+    if bits.len() < 2 {
+        return ();
+    }
+    let label = bits[0];
+    label.trim();
+    let url = bits[1];
+    url.trim();
+    if label == "" || url == "" {
+        return ();
+    }
+    let favicon = favicon_url(url);
+    if favicon == () {
+        return link(label, url);
+    }
+    column([icon(favicon, label), link(label, url)])
+}
+
+let items = [];
+for entry in config.links {
+    let node = item(entry);
+    if node != () {
+        if items.len() > 0 {
+            items.push(separator(#{ orientation: "vertical", kind: "dotted" }));
+        }
+        items.push(node);
+    }
+}
+
+if items.len() == 0 {
+    return text("No bookmarks configured", #{ size: "small", color: "cyan" });
+}
+
+box([row(items, #{ gap: 12 })])

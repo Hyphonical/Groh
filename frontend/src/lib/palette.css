@@ -1,0 +1,140 @@
+:root {
+  --background: #141414;
+  --foreground: #ffffd4;
+  --selection-background: #313131;
+  --selection-foreground: #ffffd4;
+  --cursor: #ffffff;
+  --black: #141414;
+  --red: #c06d44;
+  --green: #afb97a;
+  --yellow: #c2a86c;
+  --blue: #44474a;
+  --magenta: #b4be7c;
+  --cyan: #778385;
+  --white: #ffffd4;
+  --light-black: #262626;
+  --light-red: #de7c4c;
+  --light-green: #ccd88c;
+  --light-yellow: #e2c47e;
+  --light-blue: #5a5e62;
+  --light-magenta: #d0dc8e;
+  --light-cyan: #8a989b;
+  --light-white: #ffffd4;
+  caret-color: var(--cursor);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --background: #ffffd4;
+  --foreground: #141414;
+  --selection-background: #313131;
+  --selection-foreground: #ffffd4;
+  --cursor: #141414;
+  --black: #141414;
+  --red: #a6603d;
+  --green: #797f56;
+  --yellow: #85744d;
+  --blue: #8a989b;
+  --magenta: #797f56;
+  --cyan: #687274;
+  --white: #ffffd4;
+  --light-black: #ffffff;
+  --light-red: #a6603d;
+  --light-green: #797f56;
+  --light-yellow: #85744d;
+  --light-blue: #687274;
+  --light-magenta: #797f56;
+  --light-cyan: #778385;
+  --light-white: #ffffd4;
+  color-scheme: light;
+}
+
+::selection {
+  background: var(--selection-background);
+  color: var(--selection-foreground);
+}
+
+html {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: "JetBrains Mono", monospace;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.frame {
+  border: 1px solid var(--blue);
+  outline: 3px solid var(--background);
+  outline-offset: 0;
+}
+
+[data-color="foreground"] {
+  color: var(--foreground);
+}
+
+[data-color="cyan"] {
+  color: var(--cyan);
+}
+
+[data-color="light-yellow"] {
+  color: var(--light-yellow);
+}
+
+[data-color="light-green"] {
+  color: var(--light-green);
+}
+
+[data-color="light-red"] {
+  color: var(--light-red);
+}
+
+[data-color="red"] {
+  color: var(--red);
+}
+
+[data-color="green"] {
+  color: var(--green);
+}
+
+[data-color="yellow"] {
+  color: var(--yellow);
+}
+
+[data-color="blue"] {
+  color: var(--blue);
+}
+
+[data-color="magenta"] {
+  color: var(--magenta);
+}
+
+[data-color="white"] {
+  color: var(--white);
+}
+
+[data-color="black"] {
+  color: var(--black);
+}
+
+[data-color="light-black"] {
+  color: var(--light-black);
+}
+
+[data-color="light-blue"] {
+  color: var(--light-blue);
+}
+
+[data-color="light-magenta"] {
+  color: var(--light-magenta);
+}
+
+[data-color="light-cyan"] {
+  color: var(--light-cyan);
+}
+
+[data-color="light-white"] {
+  color: var(--light-white);
+}

@@ -1,0 +1,24 @@
+[[page.columns]]
+[[page.columns.widgets]]
+id = "containers"
+source = "widgets/Containers.groh"
+size = "large"
+show_summary = true
+[[page.columns.widgets]]
+id = "bookmarks"
+source = "widgets/Bookmarks.groh"
+size = "normal"
+[[page.columns.widgets]]
+id = "weather"
+source = "widgets/Weather.groh"
+size = "small"
+
+[widgets.bookmarks.config]
+links = [
+  "Google | https://www.google.com",
+  "GitHub | https://github.com",
+  "YouTube | https://www.youtube.com",
+  "Wikipedia | https://www.wikipedia.org",
+  "Hacker News | https://news.ycombinator.com",
+]
+

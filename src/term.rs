@@ -1,21 +1,11 @@
+use crate::palette::{BLUE, CYAN, FOREGROUND, GREEN, RED, Rgb, YELLOW};
 use std::io::{self, IsTerminal, Write};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
-const WIDTH: usize = 96;
+pub(crate) const WIDTH: usize = 96;
 const H: char = '\u{2501}';
 const CHECK: char = '\u{2713}';
 const CROSS: char = '\u{2715}';
-
-#[derive(Clone, Copy)]
-pub(crate) struct Rgb(u8, u8, u8);
-
-pub(crate) const HEAD: Rgb = Rgb(0xff, 0xff, 0xd4);
-pub(crate) const FG: Rgb = Rgb(0xff, 0xff, 0xd4);
-pub(crate) const DIM: Rgb = Rgb(0x77, 0x83, 0x85);
-pub(crate) const MUTED: Rgb = Rgb(0x44, 0x47, 0x4a);
-pub(crate) const OK: Rgb = Rgb(0xaf, 0xb9, 0x7a);
-pub(crate) const FAIL: Rgb = Rgb(0xc0, 0x6d, 0x44);
-
 pub(crate) struct Term {
     tty: bool,
     color: bool,
@@ -60,15 +50,15 @@ impl Term {
         let _ = writeln!(
             out,
             "  {}  {}  {}",
-            self.paint(&prefix, MUTED),
-            self.paint(label, HEAD),
-            self.paint(&fill, MUTED),
+            self.paint(&prefix, BLUE),
+            self.paint(label, FOREGROUND),
+            self.paint(&fill, BLUE),
         );
     }
 
     pub(crate) fn group(&self, out: &mut impl Write, name: &str) {
         let _ = writeln!(out);
-        let _ = writeln!(out, "  {}", self.paint(name, HEAD));
+        let _ = writeln!(out, "  {}", self.paint(name, FOREGROUND));
     }
 
     pub(crate) fn row(&self, out: &mut impl Write, label: &str, value: &str, color: Rgb) {
@@ -76,7 +66,7 @@ impl Term {
         let _ = writeln!(
             out,
             "  {}{}",
-            self.paint(&padded, DIM),
+            self.paint(&padded, CYAN),
             self.paint(value, color)
         );
     }
@@ -87,8 +77,8 @@ impl Term {
         let _ = writeln!(
             out,
             "  {}{}",
-            self.paint(&padded, DIM),
-            self.paint(&msg, OK)
+            self.paint(&padded, CYAN),
+            self.paint(&msg, GREEN)
         );
     }
 
@@ -100,20 +90,20 @@ impl Term {
         hint: Option<&str>,
     ) {
         let header = format!("  {CROSS}  {title}");
-        let _ = writeln!(out, "{}", self.paint(&header, FAIL));
+        let _ = writeln!(out, "{}", self.paint(&header, RED));
         if let Some(d) = detail {
             let line = format!("     {d}");
-            let _ = writeln!(out, "{}", self.paint(&line, FG));
+            let _ = writeln!(out, "{}", self.paint(&line, FOREGROUND));
         }
         if let Some(h) = hint {
             let line = format!("     {h}");
-            let _ = writeln!(out, "{}", self.paint(&line, DIM));
+            let _ = writeln!(out, "{}", self.paint(&line, CYAN));
         }
     }
 
     pub(crate) fn container_header(&self, out: &mut impl Write) {
         let line = format!("  {}{}{}", pad("name", 14), pad("state", 10), "detail");
-        let _ = writeln!(out, "{}", self.paint(&line, DIM));
+        let _ = writeln!(out, "{}", self.paint(&line, CYAN));
     }
 
     pub(crate) fn container_row(
@@ -123,23 +113,31 @@ impl Term {
         state: &str,
         detail: &str,
     ) {
-        let state_color = if state == "running" { OK } else { FAIL };
+        let state_color = match state {
+            "running" => GREEN,
+            "paused" | "restarting" => YELLOW,
+            _ => RED,
+        };
         let _ = writeln!(
             out,
             "  {}{}{}",
-            self.paint(&pad(name, 14), FG),
+            self.paint(&pad(name, 14), FOREGROUND),
             self.paint(&pad(state, 10), state_color),
-            self.paint(detail, DIM),
+            self.paint(detail, CYAN),
         );
     }
 
     pub(crate) fn container_change(&self, out: &mut impl Write, added: bool, name: &str) {
-        let (mark, color) = if added { ("+", OK) } else { ("\u{2212}", FAIL) };
+        let (mark, color) = if added {
+            ("+", GREEN)
+        } else {
+            ("\u{2212}", RED)
+        };
         let _ = writeln!(
             out,
             "  {}{}",
             self.paint(&pad(mark, 3), color),
-            self.paint(name, FG),
+            self.paint(name, FOREGROUND),
         );
     }
 
@@ -150,26 +148,26 @@ impl Term {
 }
 
 pub(crate) fn pad(text: &str, width: usize) -> String {
-    let len = text.chars().count();
-    if len >= width {
-        text.to_string()
-    } else {
-        format!("{text}{}", " ".repeat(width - len))
-    }
+    format!("{text:<width$}")
 }
 
 pub(crate) fn wrap(text: &str, max: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let mut current = String::new();
+    let mut current_chars = 0;
     for word in text.split_whitespace() {
+        let word_chars = word.chars().count();
         if current.is_empty() {
             current.push_str(word);
-        } else if current.len() + 1 + word.len() <= max {
+            current_chars = word_chars;
+        } else if current_chars + 1 + word_chars <= max {
             current.push(' ');
             current.push_str(word);
+            current_chars += 1 + word_chars;
         } else {
             lines.push(current);
             current = word.to_string();
+            current_chars = word_chars;
         }
     }
     if !current.is_empty() {
@@ -178,33 +176,7 @@ pub(crate) fn wrap(text: &str, max: usize) -> Vec<String> {
     lines
 }
 
-pub(crate) fn max_width() -> usize {
-    WIDTH
-}
-
 fn utc_timestamp() -> String {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    let days = (secs / 86_400) as i64;
-    let rem = secs % 86_400;
-    let hour = rem / 3600;
-    let min = (rem % 3600) / 60;
-    let sec = rem % 60;
-    let (year, month, day) = civil_from_days(days);
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{min:02}:{sec:02}Z")
-}
-
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
-    let z = days + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = (z - era * 146_097) as u64;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = (yoe as i64) + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = if m <= 2 { y + 1 } else { y };
-    (year, m as u32, d as u32)
+    let now: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
+    now.format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }

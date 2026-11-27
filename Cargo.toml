@@ -2,7 +2,7 @@
 name = "groh"
 version = "0.2.0"
 edition = "2024"
-description = "A me-first, self-hosted dashboard. Single pure-Rust binary, live Docker container cards over SSE."
+description = "A me-first, self-hosted dashboard. Single pure-Rust binary serving live Rhai widget trees over SSE."
 license = "AGPL-3.0-only"
 repository = "https://github.com/Hyphonical/Groh"
 keywords = ["dashboard", "docker", "self-hosted", "sse"]
@@ -17,9 +17,11 @@ bollard = { version = "0.21", default-features = false, features = ["pipe", "htt
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-[lints.cargo]
-unused_dependencies = "allow"
+# Pinned to git: carries a patched security vulnerability not yet in the crates.io release.
+rhai = { git = "https://github.com/rhaiscript/rhai", rev = "b90df574", features = ["serde", "metadata"] }
+toml = "0.8"
+ureq = { version = "3", features = ["rustls"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "alloc"] }
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
